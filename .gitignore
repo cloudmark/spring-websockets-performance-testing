@@ -1,0 +1,6 @@
+.name
+.idea/**
+results/**
+spring-websocket-performance-endpoint/.idea/**
+spring-websocket-performance-endpoint/target/**
+spring-websocket-performance-client/node_modules/**

@@ -1,0 +1,216 @@
+diff --git a/spring-websocket-performance-client/node_modules/sockjs-client-ws/lib/sockjs-client.js b/spring-websocket-performance-client/node_modules/sockjs-client-ws/lib/sockjs-client.js
+index c505371..a7b6be7 100644
+--- a/spring-websocket-performance-client/node_modules/sockjs-client-ws/lib/sockjs-client.js
++++ b/spring-websocket-performance-client/node_modules/sockjs-client-ws/lib/sockjs-client.js
+@@ -98,8 +98,9 @@
+             if (this.isReady || this.isClosing || this.isClosed) {
+                 return;
+             }
+-            var that = this
+-            var transport = new WebSocketTransport('ws://'+this.server.host+this.server.path+'/websocket');
++            var that = this; 
++            var url = 'ws://'+this.server.host+this.server.path+'/websocket'; 
++            var transport = new WebSocketTransport(url);
+             transport.write = function(writeBuffer){
+               for(var i in writeBuffer){
+                 var message = writeBuffer[i];
+diff --git a/spring-websocket-performance-client/node_modules/sockjs-client-ws/node_modules/ws/lib/Sender.js b/spring-websocket-performance-client/node_modules/sockjs-client-ws/node_modules/ws/lib/Sender.js
+index fc3b437..4a1d556 100644
+--- a/spring-websocket-performance-client/node_modules/sockjs-client-ws/node_modules/ws/lib/Sender.js
++++ b/spring-websocket-performance-client/node_modules/sockjs-client-ws/node_modules/ws/lib/Sender.js
+@@ -106,7 +106,7 @@ Sender.prototype.frameAndSend = function(opcode, data, finalFragment, maskData,
+     if (data && (typeof data.byteLength !== 'undefined' || typeof data.buffer !== 'undefined')) {
+       data = getArrayBuffer(data);
+     } else {
+-      data = new Buffer(data);
++      data = new Buffer('[' + data + ']');
+     }
+   }
+ 
+diff --git a/spring-websocket-performance-client/node_modules/sockjs-client/lib/sockjs-client.js b/spring-websocket-performance-client/node_modules/sockjs-client/lib/sockjs-client.js
+index f439153..7f533dd 100644
+--- a/spring-websocket-performance-client/node_modules/sockjs-client/lib/sockjs-client.js
++++ b/spring-websocket-performance-client/node_modules/sockjs-client/lib/sockjs-client.js
+@@ -53,7 +53,7 @@
+     }());
+ 
+     function SockJSClient (server) {
+-        var parsed, serverId, sessionId;
++        var parsed, serverId, sessionId, cookies;
+ 
+         parsed = url.parse(server);
+ 
+@@ -92,7 +92,12 @@
+         isReady:   false,
+         isClosing: false,
+         isClosed:  false,
+-
++        set_cookies: function(cookies){
++            this.cookies = cookies;              
++        }, 
++        get_cookies: function(){
++            return this.cookies; 
++        },
+         connect: function () {
+             if (this.isReady || this.isClosing || this.isClosed) {
+                 return;
+@@ -180,10 +185,9 @@
+              },
+ 
+         initialPayloadLength: 2049,
+-
+         start: function (sm) {
+             var request = {method: 'POST',
+-                           headers: {'Content-Length': 0}},
++                           headers: {'Content-Length': 0, 'Connection':'keep-alive'}},
+                 clientRequest;
+             util.shallowCopy(this.sjs.server, request);
+             request.path += '/xhr_streaming';
+@@ -192,12 +196,15 @@
+             clientRequest.end();
+         },
+ 
+-        write: function (message) {
+-            var data = JSON.stringify(message),
++        write: function (message, cookies) {
++            var cookie= this.sjs.get_cookies(), 
++                data = JSON.stringify(message),
+                 request = {method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+-                               'Content-Length': Buffer.byteLength(data,'utf8')}},
++                               'Content-Length': Buffer.byteLength(data,'utf8'), 
++                               'Cookie': 'JSESSIONID = ' + cookie 
++                           }},
+                 clientRequest;
+             util.shallowCopy(this.sjs.server, request);
+             request.path += '/xhr_send';
+diff --git a/spring-websocket-performance-client/node_modules/stomp/lib/stomp.js b/spring-websocket-performance-client/node_modules/stomp/lib/stomp.js
+index bb51546..13b4ca1 100644
+--- a/spring-websocket-performance-client/node_modules/stomp/lib/stomp.js
++++ b/spring-websocket-performance-client/node_modules/stomp/lib/stomp.js
+@@ -94,44 +94,16 @@ function parse_frame(chunk) {
+ 
+ function _connect(stomp) {
+     log = stomp.log;
+-
+-    if (stomp.ssl) {
+-        log.debug('Connecting to ' + stomp.host + ':' + stomp.port + ' using SSL');
+-        stomp.socket = tls.connect(stomp.port, stomp.host, stomp.ssl_options, function() {
+-            log.debug('SSL connection complete');
+-            if (!stomp.socket.authorized) {
+-                log.error('SSL is not authorized: '+stomp.socket.authorizationError);
+-                if (stomp.ssl_validate) {
+-                    _disconnect(stomp);
+-                    return;
+-                }
+-            }
+-            _setupListeners(stomp);
+-        });
+-    }
+-    else {
+-        log.debug('Connecting to ' + stomp.host + ':' + stomp.port);
+-        stomp.socket = new net.Socket();
+-        stomp.socket.connect(stomp.port, stomp.host);
+-        _setupListeners(stomp);
+-    }
++    _setupListeners(stomp);
+ }
+ 
+ function _setupListeners(stomp) {
+     function _connected() {
+         log.debug('Connected to socket');
+-        var headers = {};
+-        if (utils.really_defined(stomp.login) &&
+-            utils.really_defined(stomp.passcode)) {
+-            headers.login = stomp.login;
+-            headers.passcode = stomp.passcode;
+-        }
+-        if (utils.really_defined(stomp["client-id"])) {
+-            headers["client-id"] = stomp["client-id"];
+-        }
+-        if (utils.really_defined(stomp["vhost"])) {
+-            headers["host"] = stomp["vhost"];
+-        }
++        var headers = {
++            "accept-version" : "1.1,1.0",
++            "heart-beat" : "10000,10000"
++        };
+         stomp_connect(stomp, headers);
+     }
+ 
+@@ -178,12 +150,8 @@ function _setupListeners(stomp) {
+         }
+         stomp.emit("disconnected", error);
+     });
+-
+-    if (stomp.ssl) {
+-        _connected();
+-    } else {
+-        socket.on('connect', _connected);
+-    }
++    _connected();
++    
+ };
+ 
+ function stomp_connect(stomp, headers) {
+@@ -233,7 +201,7 @@ function send_command(stomp, command, headers, body, want_receipt) {
+ function send_frame(stomp, _frame) {
+     var socket = stomp.socket;
+     var frame_str = _frame.as_string();
+-
++    frame_str = frame_str; 
+     if (socket.write(frame_str) === false) {
+         log.debug('Write buffered');
+     }
+@@ -248,13 +216,20 @@ function send_frame(stomp, _frame) {
+ //
+ function Stomp(args) {
+     events.EventEmitter.call(this);
++    this.socket = args['socket']; 
++    this.log = {
++        info: args['log'], 
++        debug: args['log'], 
++        warn: args['log'], 
++        error: args['log']
++    };
++
+ 
+     this.port = args['port'] || 61613;
+     this.host = args['host'] || '127.0.0.1';
+     this.debug = args['debug'];
+     this.login = args['login'] || null;
+     this.passcode = args['passcode'] || null;
+-    this.log = new stomp_utils.StompLogging(this.debug);
+     this._subscribed_to = {};
+     this.session = null;
+     this.ssl = args['ssl'] ? true : false;
+@@ -325,6 +300,7 @@ Stomp.prototype.handle_new_frame = function(this_frame) {
+             this.emit('receipt', this_frame.headers['receipt-id']);
+             break;
+         case "ERROR":
++            log.error(this_frame); 
+             this.emit('error', this_frame);
+             break;
+         default:
+@@ -354,20 +330,6 @@ Stomp.prototype.subscribe = function(headers, callback) {
+     var destination = headers['destination'];
+     headers['session'] = this.session;
+     send_command(this, 'SUBSCRIBE', headers);
+-
+-    /**
+-    / Maybe we could subscribe to mulitple queues?
+-    / if (destination instanceof Array) {
+-    /   for (var = i; i < 0; i++) {
+-    /     this._subscribed_to[destination[i]] = { enabled: true, callback: callback };
+-    /   }
+-    / }
+-    / else {
+-    /     this._subscribed_to[destination] = { enabled: true, callback: callback };
+-    / }
+-    /
+-    */
+-
+     this._subscribed_to[destination] = { enabled: true, callback: callback };
+     this.log.debug('subscribed to: ' + destination + ' with headers ' + sys.inspect(headers));
+ };

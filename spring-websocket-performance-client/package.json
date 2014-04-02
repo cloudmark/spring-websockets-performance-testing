@@ -1,0 +1,9 @@
+{
+  "name": "spring-websocket-performance-client",
+  "author": "Mark Galea",
+  "dependencies": {
+    "sockjs-client": "~0.1.3",
+    "sockjs-client-ws": "~0.1.0", 
+    "stomp": "~0.1.1"
+  }
+}
